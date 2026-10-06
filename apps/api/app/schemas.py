@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TripCityCreate(BaseModel):
@@ -45,7 +45,7 @@ class TripRead(BaseModel):
     start_date: datetime.date
     end_date: datetime.date
     cities: list[TripCityRead]
-    days: list[DayRead]
+    days: list[DayRead] = Field(default_factory=list)
 
 
 class UserRead(BaseModel):
