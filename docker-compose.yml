@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: wyro
       POSTGRES_DB: wyro
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - wyro_pgdata:/var/lib/postgresql/data
 
