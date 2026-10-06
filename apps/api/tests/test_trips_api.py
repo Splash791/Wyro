@@ -1,3 +1,6 @@
+import uuid
+
+from app.models import Trip, User
 from app.seed import seed_dev_user
 
 AUTH = {"Authorization": "Bearer dev-token"}
@@ -68,4 +71,21 @@ def test_list_trips(client, session):
 def test_missing_trip_404(client, session):
     seed_dev_user(session)
     r = client.get("/trips/00000000-0000-0000-0000-0000000000ff", headers=AUTH)
+    assert r.status_code == 404
+
+
+def test_other_users_trip_is_404(client, session):
+    seed_dev_user(session)
+    other = User(id=uuid.uuid4(), email="other@test.app", auth_provider="dev")
+    session.add(other)
+    session.flush()
+    other_trip = Trip(
+        user_id=other.id,
+        title="Not yours",
+        start_date="2026-05-01",
+        end_date="2026-05-02",
+    )
+    session.add(other_trip)
+    session.flush()
+    r = client.get(f"/trips/{other_trip.id}", headers=AUTH)
     assert r.status_code == 404

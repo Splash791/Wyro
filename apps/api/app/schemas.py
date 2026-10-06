@@ -45,6 +45,9 @@ class TripRead(BaseModel):
     start_date: datetime.date
     end_date: datetime.date
     cities: list[TripCityRead]
+    # default_factory=list only supports the validate-then-overwrite pattern in
+    # routers.trips._to_trip_read, which always sets .days from generate_days();
+    # an empty [] is never a legitimate terminal value.
     days: list[DayRead] = Field(default_factory=list)
 
 
