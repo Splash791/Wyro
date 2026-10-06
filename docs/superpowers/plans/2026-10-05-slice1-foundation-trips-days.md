@@ -17,6 +17,7 @@
 - Everything runs on **free/hobby tiers at personal scale**.
 - Backend Python managed with **`uv`**; mobile package manager is **npm** (Expo default).
 - Dev user id is the constant UUID `00000000-0000-0000-0000-000000000001`; dev auth token is the literal string `dev-token`.
+- **DB host port is `5433`** (updated 2026-10-06 — a host-native `postgresql@14` already occupies `5432`). The container's internal port stays `5432`; `docker-compose.yml` publishes `5433:5432` and the backend DB URL is `postgresql+psycopg://wyro:wyro@localhost:5433/wyro`. Task 1/2 code blocks below still show the original `5432`; the committed code uses `5433`.
 
 ---
 
