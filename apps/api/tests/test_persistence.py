@@ -6,17 +6,18 @@ conftest.py). That makes writes visible to the test via `flush`, but it can
 never detect a production bug where `get_session` fails to `commit()` before
 `close()` rolls back the transaction -- the rollback happens either way.
 
-This test deliberately avoids those fixtures. It wires up a *committing*
-session factory bound to the real test engine (mirroring the fixed
-`app.db.get_session`), drives a request through a real TestClient, and then
-opens a brand-new, independent `Session` to read the row back. If the
-request handler only flushed (the bug), the row would not exist in a
-different session/connection and the test would fail.
+This test deliberately avoids those fixtures AND does not override the
+`get_session` dependency. Instead it repoints `app.db.SessionLocal` at the real
+test engine, so the genuine `app.db.get_session` generator runs through a real
+TestClient request -- including its post-yield `commit()`. It then opens a
+brand-new, independent `Session` to read the row back. If `get_session` only
+flushed (the bug, or a future regression that removes the commit), the row
+would not exist in a different session/connection and this test would fail.
 """
 
 import uuid
-from collections.abc import Iterator
 
+import app.db as db
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -53,27 +54,20 @@ TRIP_BODY = {
 def test_created_trip_is_actually_committed(_engine):
     """POST /trips must survive the request's session being closed.
 
-    Uses the real wyro_test engine (via the `_engine` fixture) with a
-    committing session factory -- i.e. the same commit-on-success,
-    rollback-on-exception behavior as the fixed `app.db.get_session` -- so
-    this exercises the actual production persistence path instead of the
-    shared-transaction test fixtures.
+    This exercises the REAL `app.db.get_session` (no dependency override) by
+    repointing `app.db.SessionLocal` at the wyro_test engine. If the real
+    `get_session` ever stops committing, this test fails -- which is the whole
+    point (the override-based version could not catch that regression).
     """
     TestSessionLocal = sessionmaker(bind=_engine, expire_on_commit=False)
 
-    def committing_get_session() -> Iterator[Session]:
-        session = TestSessionLocal()
-        try:
-            yield session
-            session.commit()
-        except Exception:
-            session.rollback()
-            raise
-        finally:
-            session.close()
+    # Guard: no stray dependency override should shadow the real get_session.
+    assert get_session not in app.dependency_overrides
 
-    # Seed the dev user with its own real commit -- not the `dev_user`
-    # fixture, which lives inside the rolled-back transaction.
+    original_session_local = db.SessionLocal
+    db.SessionLocal = TestSessionLocal  # the real get_session reads this global
+
+    # Seed the dev user with a real commit (not the rolled-back `dev_user` fixture).
     seed_session = TestSessionLocal()
     try:
         seed_session.add(User(id=DEV_USER_ID, email="dev@wyro.app", auth_provider="dev"))
@@ -81,7 +75,6 @@ def test_created_trip_is_actually_committed(_engine):
     finally:
         seed_session.close()
 
-    app.dependency_overrides[get_session] = committing_get_session
     trip_id: uuid.UUID | None = None
     try:
         with TestClient(app) as client:
@@ -89,10 +82,10 @@ def test_created_trip_is_actually_committed(_engine):
         assert r.status_code == 201, r.text
         trip_id = uuid.UUID(r.json()["id"])
 
-        # The request's session has been committed and closed by now. Read
-        # the trip back from a brand-new, independent session to prove the
-        # row actually persisted -- this is the assertion that the old,
-        # commit-less `get_session` would fail.
+        # The request's session has been committed and closed by the real
+        # get_session by now. Read the trip back from a brand-new, independent
+        # session to prove the row actually persisted -- the commit-less
+        # get_session would fail this assertion.
         verify_session = TestSessionLocal()
         try:
             persisted = verify_session.get(Trip, trip_id)
@@ -103,7 +96,7 @@ def test_created_trip_is_actually_committed(_engine):
         finally:
             verify_session.close()
     finally:
-        app.dependency_overrides.clear()
+        db.SessionLocal = original_session_local
         # Mandatory cleanup: this test commits real rows to wyro_test, and
         # _engine only drops/recreates tables once per pytest session, so
         # leftovers would leak into other tests (e.g. test_list_trips).
@@ -112,7 +105,7 @@ def test_created_trip_is_actually_committed(_engine):
             if trip_id is not None:
                 trip = cleanup_session.get(Trip, trip_id)
                 if trip is not None:
-                    cleanup_session.delete(trip)  # cascades to trip_cities
+                    cleanup_session.delete(trip)  # ORM cascade removes trip_cities
             dev_user = cleanup_session.get(User, DEV_USER_ID)
             if dev_user is not None:
                 cleanup_session.delete(dev_user)
