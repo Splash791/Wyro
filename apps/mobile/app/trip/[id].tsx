@@ -15,7 +15,7 @@ export default function TripDetail() {
     <View style={styles.container}>
       <Text style={styles.title}>{trip.title}</Text>
       <SectionList
-        sections={[{ title: "Days", data: trip.days! }]}
+        sections={[{ title: "Days", data: trip.days ?? [] }]}
         keyExtractor={(day, i) => `${day.date}-${day.city}-${i}`}
         renderSectionHeader={({ section }) => <Text style={styles.header}>{section.title}</Text>}
         renderItem={({ item }) => <Text style={styles.day}>{formatDayLabel(item)}</Text>}
