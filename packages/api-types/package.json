@@ -1,0 +1,12 @@
+{
+  "name": "@wyro/api-types",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "scripts": {
+    "generate": "openapi-typescript openapi.json -o index.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.4.0"
+  }
+}
