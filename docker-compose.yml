@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: wyro
+      POSTGRES_PASSWORD: wyro
+      POSTGRES_DB: wyro
+    ports:
+      - "5433:5432"
+    volumes:
+      - wyro_pgdata:/var/lib/postgresql/data
+
+volumes:
+  wyro_pgdata:
